@@ -12,15 +12,15 @@ workflows:
         script: |
           npm install
           npm run build
+          # Generate icons in the build environment
           npx @capacitor/assets generate --android 
           npx cap sync android
       - name: Build Signed Android APK
         script: |
           cd android
-          # Give execution permissions to the gradle wrapper
           chmod +x gradlew
-          # Clean old build data and build the Signed Release APK
+          # 🎯 The 'clean' and 'assembleRelease' will now use your 'kilogram user' keystore
           ./gradlew clean assembleRelease 
     artifacts:
-      # 🎯 The recursive wildcard (**) ensures Codemagic finds the APK anywhere
-      - android/app/build/outputs/apk/**/*.apk
+      # 🎯 This ensures Codemagic collects the SIGNED app-release.apk
+      - android/app/build/outputs/apk/release/app-release.apk
