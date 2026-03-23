@@ -1,0 +1,18 @@
+workflows:
+  android-workflow:
+    name: Android APK Build
+    environment:
+      groups:
+        - supabase_creds # Name of the group you created in UI
+    scripts:
+      - name: Install dependencies and build web
+        script: |
+          npm install
+          npm run build
+          npx cap sync android
+      - name: Build Android APK
+        script: |
+          cd android
+          ./gradlew assembleDebug
+    artifacts:
+      - android/app/build/outputs/apk/**/*.apk
