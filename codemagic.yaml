@@ -7,7 +7,7 @@ workflows:
       java: 21 
       # 🎯 Fixed: Moved inside environment block correctly
       android_signing:
-        - kilogram_keystore
+        - kilogram_user
     scripts:
       - name: Install dependencies and build web
         script: |
