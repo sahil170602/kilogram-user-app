@@ -4,14 +4,9 @@ workflows:
     environment:
       groups:
         - supabase_creds
-      # 🎯 ADD THESE TWO LINES BELOW
-      vars:
-        JAVA_VERSION: "21" 
+      # 🎯 This is the correct way to set Java 21 in Codemagic
+      java: 21 
     scripts:
-      - name: Set up Java 21
-        script: |
-          # This command switches the environment to Java 21
-          sdk use java 21.0.2-term
       - name: Install dependencies and build web
         script: |
           npm install
