@@ -12,15 +12,17 @@ workflows:
         script: |
           npm install
           npm run build
-          # 🎯 This forces the custom icon generation in the cloud
           npx @capacitor/assets generate --android 
           npx cap sync android
       - name: Build Signed Android APK
         script: |
           cd android
           chmod +x gradlew
-          # 🎯 This creates the 'app-release.apk' using your certificate
-          ./gradlew clean assembleRelease 
+          # 🎯 This command forces the signing using Codemagic variables
+          ./gradlew clean assembleRelease \
+            -Pandroid.injected.signing.store.file=$CM_KEYSTORE_PATH \
+            -Pandroid.injected.signing.store.password=$CM_KEYSTORE_PASSWORD \
+            -Pandroid.injected.signing.key.alias=$CM_KEY_ALIAS \
+            -Pandroid.injected.signing.key.password=$CM_KEY_PASSWORD
     artifacts:
-      # 🎯 The '**' makes sure Codemagic finds the file no matter what
-      - android/app/build/outputs/apk/**/*.apk
+      - android/app/build/outputs/apk/release/app-release.apk
