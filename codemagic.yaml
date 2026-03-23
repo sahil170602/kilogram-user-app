@@ -23,5 +23,5 @@ workflows:
           # 🎯 Fixed: Changed assembleDebug to assembleRelease for signing
           ./gradlew clean assembleRelease 
     artifacts:
-      # 🎯 Points to the signed release folder
-      - android/app/build/outputs/apk/release/*.apk
+      # 🎯 This ensures you only get the Signed Release APK
+      - android/app/build/outputs/apk/release/app-release.apk
