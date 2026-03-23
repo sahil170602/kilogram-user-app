@@ -1,21 +1,27 @@
 workflows:
   android-workflow:
-    name: Android APK Build
+    name: Android Signed APK Build
     environment:
       groups:
         - supabase_creds
-      # 🎯 This is the correct way to set Java 21 in Codemagic
       java: 21 
+      # 🎯 Fixed: Moved inside environment block correctly
+      android_signing:
+        - kilogram_keystore
     scripts:
       - name: Install dependencies and build web
         script: |
           npm install
           npm run build
+          # 🎯 Generates icons and splash screens in the cloud
+          npx @capacitor/assets generate --android 
           npx cap sync android
-      - name: Build Android APK
+      - name: Build Signed Android APK
         script: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          # 🎯 Fixed: Changed assembleDebug to assembleRelease for signing
+          ./gradlew clean assembleRelease 
     artifacts:
-      - android/app/build/outputs/apk/**/*.apk
+      # 🎯 Points to the signed release folder
+      - android/app/build/outputs/apk/release/*.apk
