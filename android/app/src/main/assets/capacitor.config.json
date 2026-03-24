@@ -1,0 +1,9 @@
+{
+	"appId": "com.kilogram.rider",
+	"appName": "Kilogram Rider",
+	"webDir": "dist",
+	"server": {
+		"androidScheme": "https",
+		"cleartext": true
+	}
+}
