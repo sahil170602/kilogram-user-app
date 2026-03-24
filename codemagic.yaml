@@ -1,6 +1,6 @@
 workflows:
-  android-workflow:
-    name: Android Signed APK Build
+  android-rider-workflow:
+    name: Kilogram Rider - Signed APK Build
     environment:
       groups:
         - supabase_creds
@@ -8,21 +8,25 @@ workflows:
       android_signing:
         - kilogram user
     scripts:
-      - name: Install and Build Web
+      - name: Install and Build Rider Web
         script: |
+          # 🎯 CRITICAL: Navigate to the specific app folder
+          cd apps/rider-app
           npm install
           npm run build
+          # Generate icons from the local icon.png
           npx @capacitor/assets generate --android 
           npx cap sync android
-      - name: Build Signed Android APK
+      - name: Build Signed Rider APK
         script: |
-          cd android
+          # 🎯 Navigate to the android folder inside the app folder
+          cd apps/rider-app/android
           chmod +x gradlew
-          # 🎯 This command forces the signing using Codemagic variables
           ./gradlew clean assembleRelease \
             -Pandroid.injected.signing.store.file=$CM_KEYSTORE_PATH \
-            -Pandroid.injected.signing.store.password=$CM_KEYSTORE_PASSWORD \
+            -Pandroid.injected.signing.store.password=$CM_KEY_PASSWORD \
             -Pandroid.injected.signing.key.alias=$CM_KEY_ALIAS \
             -Pandroid.injected.signing.key.password=$CM_KEY_PASSWORD
     artifacts:
-      - android/app/build/outputs/apk/release/app-release.apk
+      # 🎯 Updated path to find the APK inside the monorepo structure
+      - apps/rider-app/android/app/build/outputs/apk/release/app-release.apk

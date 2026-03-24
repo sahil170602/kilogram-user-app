@@ -14,12 +14,14 @@ interface CheckoutProps {
   onBack: () => void;
   onSuccess: (data: any) => void;
   onSaveNewAddress: (updatedAddresses: any[]) => void; 
+  clearCart: () => void; // 🎯 Added missing clearCart prop
 }
 
-const CheckoutScreen = ({ total, cartItems = [], user, onBack, onSuccess, onSaveNewAddress }: CheckoutProps) => {
+const CheckoutScreen = ({ total, cartItems = [], user, onBack, onSuccess, onSaveNewAddress, clearCart }: CheckoutProps) => {
   // --- Profile Data ---
-  const realName = user?.full_name || "set name";
-  const realPhone = user?.phone || "no number";
+  // 🎯 Updated to check multiple common Supabase phone fields
+  const realName = user?.full_name || user?.user_metadata?.full_name || "set name";
+  const realPhone = user?.phone || user?.phone_number || user?.user_metadata?.phone || "no number";
   const savedAddresses = user?.addresses || [];
 
   // --- State ---
@@ -31,7 +33,7 @@ const CheckoutScreen = ({ total, cartItems = [], user, onBack, onSuccess, onSave
   const [newAddress, setNewAddress] = useState("");
   const [isDetecting, setIsDetecting] = useState(false);
 
-  // --- 🎯 FETCH PROFILE ADDRESS (Same as Header) ---
+  // --- 🎯 FETCH PROFILE ADDRESS ---
   useEffect(() => {
     const fetchProfileAddress = async () => {
       if (!user?.id) return;
@@ -53,22 +55,16 @@ const CheckoutScreen = ({ total, cartItems = [], user, onBack, onSuccess, onSave
     fetchProfileAddress();
   }, [user?.id]);
 
-  // --- Unified List for Dropdown ---
   const addressList = useMemo(() => {
     const list = [];
-    
-    // 1. Add the main profile address (from last_address column)
     if (profileAddress) {
       list.push({ id: 'profile', type: 'verified spot', address: profileAddress });
     } else {
       list.push({ id: 'profile', type: 'verified spot', address: 'fetching address...' });
     }
-
-    // 2. Add other secondary addresses if any
     savedAddresses.forEach((addr: any) => {
       list.push({ ...addr });
     });
-
     return list;
   }, [profileAddress, savedAddresses]);
 
@@ -91,57 +87,62 @@ const CheckoutScreen = ({ total, cartItems = [], user, onBack, onSuccess, onSave
   };
 
   const handlePlaceOrder = async () => {
-    if (selectedAddrId === 'new' && newAddress.length < 5) return;
+    if (cartItems.length === 0) return;
     
     setLoading(true);
     try {
-      let finalAddress = getSelectedAddressText();
-
-      // If user provided a brand new manual address, save it to the array
-      if (selectedAddrId === 'new') {
-        const newEntry = { id: Date.now(), type: 'other', address: newAddress };
-        const updatedAddresses = [newEntry, ...savedAddresses];
-        await supabase.from('profiles').update({ addresses: updatedAddresses }).eq('id', user.id);
-        onSaveNewAddress(updatedAddresses);
-      }
-
-      const cleanCartItems = cartItems.map((item: any) => ({
-        id: item.id,
-        name: item.name,
-        price: item.price,
-        qty: item.qty
-      }));
-
-      const { data, error } = await supabase
+      // 1. Create the Main Order
+      // Defaulting status to 'order placed' as requested
+      const { data: order, error: orderError } = await supabase
         .from('orders')
         .insert([{
           user_id: user.id,
-          user_name: realName,
+          user_name: realName, 
           user_phone: realPhone,
-          address: finalAddress,
+          address: getSelectedAddressText(),
           total_amount: total,
-          items: cleanCartItems,
-          status: 'order placed',
-          payment_method: 'cod'
+          status: 'order placed', 
+          payment_method: 'cod',
+          created_at: new Date().toISOString(),
         }])
         .select().single();
 
-      if (error) throw error;
-      onSuccess(data);
+      if (orderError) throw orderError;
 
+      // 2. Prepare the items for the manifest
+      // This maps your cart data to match your Supabase table columns exactly
+      const itemsToInsert = cartItems.map((item: any) => ({
+        order_id: order.id,           // Connects to the order above
+        product_id: item.id,          // Foreign key to products
+        product_name: item.name,      // Direct name for the manifest fallback
+        quantity: item.qty || 1,
+        unit_price: item.price
+      }));
+
+      // 3. Insert into order_items
+      const { error: itemsError } = await supabase
+        .from('order_items')
+        .insert(itemsToInsert);
+
+      if (itemsError) throw itemsError;
+
+      // 4. Success Actions
+      clearCart(); // 🎯 Now properly defined via props
+      onSuccess(order); // Navigate to tracking or success screen
+      
     } catch (err: any) {
-      alert("Error: " + err.message);
+      console.error("Checkout Failed:", err.message);
+      alert("Checkout Error: " + err.message);
     } finally {
       setLoading(false);
     }
   };
-
+  
   return (
     <motion.div 
       initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
       className="fixed inset-0 z-[200] bg-[#08080a] flex flex-col font-sans text-white lowercase"
     >
-      {/* Header */}
       <header className="px-6 pt-12 pb-6 flex items-center gap-4 border-b border-white/5 bg-[#08080a]">
         <button onClick={onBack} className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
           <ChevronLeft size={20} />
@@ -150,7 +151,6 @@ const CheckoutScreen = ({ total, cartItems = [], user, onBack, onSuccess, onSave
       </header>
 
       <div className="flex-1 overflow-y-auto px-6 py-6 no-scrollbar pb-10">
-        {/* Contact Info */}
         <section className="mb-8">
           <h3 className="text-[10px] font-black uppercase tracking-widest text-white/30 mb-4 px-2">delivery contact</h3>
           <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 space-y-4 shadow-inner">
@@ -165,7 +165,6 @@ const CheckoutScreen = ({ total, cartItems = [], user, onBack, onSuccess, onSave
           </div>
         </section>
 
-        {/* Address Selection */}
         <section className="mb-8">
           <h3 className="text-[10px] font-black uppercase tracking-widest text-white/30 mb-4 px-2">delivery address</h3>
           <div className="relative">
@@ -179,9 +178,7 @@ const CheckoutScreen = ({ total, cartItems = [], user, onBack, onSuccess, onSave
                 </div>
                 <div className="text-left max-w-[200px]">
                   <p className="text-[10px] font-black text-white/40 uppercase tracking-widest">Selected Spot</p>
-                  <p className="text-xs font-bold truncate">
-                    {getSelectedAddressText()}
-                  </p>
+                  <p className="text-xs font-bold truncate">{getSelectedAddressText()}</p>
                 </div>
               </div>
               <ChevronDown size={20} className={`text-white/20 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
@@ -220,7 +217,6 @@ const CheckoutScreen = ({ total, cartItems = [], user, onBack, onSuccess, onSave
           </div>
         </section>
 
-        {/* Speed Banner */}
         <section className="bg-primary/10 border border-primary/20 rounded-[2rem] p-5 flex items-center gap-4 mb-10">
           <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center text-black">
             <Zap size={24} fill="currentColor" />
@@ -237,7 +233,6 @@ const CheckoutScreen = ({ total, cartItems = [], user, onBack, onSuccess, onSave
         </div>
       </div>
 
-      {/* Footer / Payment */}
       <div className="p-6 bg-[#0c0c0f] border-t border-white/5 shadow-[0_-20px_50px_rgba(0,0,0,0.4)]">
         <div className="flex items-center justify-between mb-6 px-2">
           <div className="flex flex-col">
@@ -245,7 +240,7 @@ const CheckoutScreen = ({ total, cartItems = [], user, onBack, onSuccess, onSave
             <span className="text-3xl font-black italic text-primary">₹{total}</span>
           </div>
           <div className="px-3 py-1 bg-white/5 rounded-lg border border-white/5">
-             <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">COD</span>
+             <span className="text-[10px] font-black text-green-400 capitalize tracking-wide">Cash on Delivery</span>
           </div>
         </div>
         
@@ -263,7 +258,6 @@ const CheckoutScreen = ({ total, cartItems = [], user, onBack, onSuccess, onSave
         </button>
       </div>
 
-      {/* Manual Entry Popup */}
       <AnimatePresence>
         {showAddressPopup && (
           <>
