@@ -1,6 +1,6 @@
 workflows:
   android-user-workflow:
-    name: Kilogram User - Signed APK Build
+    name: Kilogram User - Play Store AAB Build
     environment:
       groups:
         - supabase_creds
@@ -10,24 +10,23 @@ workflows:
     scripts:
       - name: Install and Build User Web
         script: |
-          # 🎯 We removed the "cd apps/..." because you are already in the User repo root
           npm install
           npm run build
           # Generate icons from the local icon.png
           npx @capacitor/assets generate --android 
           npx cap sync android
           
-      - name: Build Signed User APK
+      - name: Build Signed User App Bundle (AAB)
         script: |
-          # 🎯 Navigate directly into the android folder
           cd android
           chmod +x gradlew
-          ./gradlew clean assembleRelease \
+          # 🎯 CHANGED: bundleRelease generates the .aab file for the Play Store
+          ./gradlew clean bundleRelease \
             -Pandroid.injected.signing.store.file=$CM_KEYSTORE_PATH \
             -Pandroid.injected.signing.store.password=$CM_KEY_PASSWORD \
             -Pandroid.injected.signing.key.alias=$CM_KEY_ALIAS \
             -Pandroid.injected.signing.key.password=$CM_KEY_PASSWORD
             
     artifacts:
-      # 🎯 Updated path to pull the APK directly from the root android folder
-      - android/app/build/outputs/apk/release/app-release.apk
+      # 🎯 CHANGED: Grabbing the .aab file instead of the apk
+      - android/app/build/outputs/bundle/release/app-release.aab

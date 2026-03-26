@@ -5,6 +5,7 @@ import SplashScreen from './components/SplashScreen';
 import LoginPage from './pages/LoginPage';
 import HomeScreen from './pages/HomeScreen';
 import ProfileScreen from './pages/ProfileScreen';
+import { App as CapacitorApp } from '@capacitor/app';
 
 function App() {
   const [stage, setStage] = useState<'loading' | 'login' | 'dashboard'>('loading');
@@ -148,7 +149,32 @@ function App() {
   }, [user?.id, stage]);
 
   /**
-   * 3. HANDLERS
+   * 3. HARDWARE BACK BUTTON LOGIC (ANDROID)
+   */
+  useEffect(() => {
+    let listener: any;
+
+    const setupBackButton = async () => {
+      listener = await CapacitorApp.addListener('backButton', () => {
+        if (showProfile) {
+          // 🎯 If Profile is open, smoothly go back to Home
+          setShowProfile(false);
+        } else if (stage === 'dashboard' || stage === 'login') {
+          // 🎯 If on the main Home screen or Login screen, exit the app
+          CapacitorApp.exitApp();
+        }
+      });
+    };
+
+    setupBackButton();
+
+    return () => {
+      if (listener) listener.remove();
+    };
+  }, [showProfile, stage]);
+
+  /**
+   * 4. HANDLERS
    */
   const handleSplashComplete = () => {
     if (user) setStage('dashboard');

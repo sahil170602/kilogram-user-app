@@ -183,8 +183,8 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
           {step === 'phone' && (
             <motion.div key="phone" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -20 }} className="w-full">
               <div className="text-center mb-10">
-                <h1 className="text-5xl font-black tracking-tighter mb-1 uppercase italic">KILO<span className="text-primary">GRAM</span></h1>
-                <p className="text-[9px] text-white/20 tracking-[0.5em] font-black uppercase">Premium Logistics V1.0</p>
+                <h1 className="text-5xl font-black tracking-tighter mb-1 uppercase ">KILO<span className="text-primary">GRAM</span></h1>
+                <p className="text-[9px] text-white/20 tracking-[0.5em] font-black uppercase">V1.0</p>
               </div>
 
               <div className="w-full bg-white/[0.03] border border-white/10 rounded-2xl p-5 flex items-center gap-4 mb-5 shadow-inner">
@@ -193,7 +193,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
                   type="tel" value={phone} 
                   onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                   placeholder="Enter Mobile Number" 
-                  className="bg-transparent border-none outline-none flex-1 text-white font-black tracking-[0.1em] text-base placeholder:text-white/10"
+                  className="bg-transparent border-none outline-none flex-1 text-white font-black tracking-[0em] text-base placeholder:text-white/10"
                 />
               </div>
 

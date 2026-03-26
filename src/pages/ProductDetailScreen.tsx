@@ -13,6 +13,8 @@ interface Product {
   unit: string;
   img?: string;
   image_url?: string;
+  // 🎯 Updated to include 'rating' from our new DB column
+  rating?: number; 
   rating_avg?: number;
   rating_count?: number;
   brand?: string;
@@ -60,6 +62,9 @@ const ProductDetailScreen = ({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [showCopiedBadge, setShowCopiedBadge] = useState(false);
 
+  // 🎯 Use either 'rating' or 'rating_avg' for fallback compatibility
+  const currentRating = product.rating ?? product.rating_avg ?? 0;
+
   const suggestedProducts = (allProducts || [])
     .filter(p => p.category_id === product.category_id && p.id !== product.id)
     .sort(() => 0.5 - Math.random()) 
@@ -104,7 +109,8 @@ const ProductDetailScreen = ({
         <span className="text-sm font-black tracking-tighter">₹{item.price}</span>
         <div className="flex items-center gap-0.5 text-primary">
           <Star size={10} fill="currentColor" />
-          <span className="text-[10px] font-bold">{item.rating_avg ? Number(item.rating_avg).toFixed(1) : "0.0"}</span>
+          {/* 🎯 Updated card rating display */}
+          <span className="text-[10px] font-bold">{(item.rating ?? item.rating_avg ?? 0).toFixed(1)}</span>
         </div>
       </div>
     </div>
@@ -135,7 +141,6 @@ const ProductDetailScreen = ({
       </header>
 
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto no-scrollbar">
-        {/* HERO IMAGE CONTAINER - UPDATED TO FULL SIZE */}
         <div className="relative h-[50vh] w-full bg-white/[0.02] flex items-center justify-center rounded-b-[3.5rem] border-b border-white/5 overflow-hidden shrink-0">
           {product.image_url ? (
               <img 
@@ -146,8 +151,6 @@ const ProductDetailScreen = ({
           ) : (
             <span className="text-[140px] z-10">{product.img || "📦"}</span>
           )}
-          
-          {/* Subtle bottom fade to blend with background */}
           <div className="absolute inset-0 bg-gradient-to-t from-[#08080a] via-transparent to-transparent z-20 pointer-events-none" />
         </div>
 
@@ -173,8 +176,9 @@ const ProductDetailScreen = ({
             </div>
             <div className="bg-primary/10 border border-primary/20 px-3 py-1.5 rounded-xl flex items-center gap-2">
               <Star size={14} fill="#ff99c1" className="text-primary" />
+              {/* 🎯 Main Detail Rating Display */}
               <span className="text-sm font-black text-primary">
-                {product.rating_avg ? Number(product.rating_avg).toFixed(1) : "0.0"}
+                {Number(currentRating).toFixed(1)}
               </span>
             </div>
           </div>

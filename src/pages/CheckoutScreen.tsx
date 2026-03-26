@@ -14,12 +14,11 @@ interface CheckoutProps {
   onBack: () => void;
   onSuccess: (data: any) => void;
   onSaveNewAddress: (updatedAddresses: any[]) => void; 
-  clearCart: () => void; // 🎯 Added missing clearCart prop
+  // 🎯 REMOVED clearCart from here entirely!
 }
 
-const CheckoutScreen = ({ total, cartItems = [], user, onBack, onSuccess, onSaveNewAddress, clearCart }: CheckoutProps) => {
+const CheckoutScreen = ({ total, cartItems = [], user, onBack, onSuccess, onSaveNewAddress }: CheckoutProps) => {
   // --- Profile Data ---
-  // 🎯 Updated to check multiple common Supabase phone fields
   const realName = user?.full_name || user?.user_metadata?.full_name || "set name";
   const realPhone = user?.phone || user?.phone_number || user?.user_metadata?.phone || "no number";
   const savedAddresses = user?.addresses || [];
@@ -92,7 +91,6 @@ const CheckoutScreen = ({ total, cartItems = [], user, onBack, onSuccess, onSave
     setLoading(true);
     try {
       // 1. Create the Main Order
-      // Defaulting status to 'order placed' as requested
       const { data: order, error: orderError } = await supabase
         .from('orders')
         .insert([{
@@ -110,11 +108,10 @@ const CheckoutScreen = ({ total, cartItems = [], user, onBack, onSuccess, onSave
       if (orderError) throw orderError;
 
       // 2. Prepare the items for the manifest
-      // This maps your cart data to match your Supabase table columns exactly
       const itemsToInsert = cartItems.map((item: any) => ({
-        order_id: order.id,           // Connects to the order above
-        product_id: item.id,          // Foreign key to products
-        product_name: item.name,      // Direct name for the manifest fallback
+        order_id: order.id,           
+        product_id: item.id,          
+        product_name: item.name,      
         quantity: item.qty || 1,
         unit_price: item.price
       }));
@@ -127,8 +124,9 @@ const CheckoutScreen = ({ total, cartItems = [], user, onBack, onSuccess, onSave
       if (itemsError) throw itemsError;
 
       // 4. Success Actions
-      clearCart(); // 🎯 Now properly defined via props
-      onSuccess(order); // Navigate to tracking or success screen
+      // 🎯 REMOVED clearCart() here. 
+      // onSuccess will trigger handleOrderSuccess in CartScreen, which handles clearing the cart via HomeScreen!
+      onSuccess(order); 
       
     } catch (err: any) {
       console.error("Checkout Failed:", err.message);

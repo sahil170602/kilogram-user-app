@@ -3,6 +3,7 @@ import {
   Plus, Bike, Timer, ChevronRight, ShoppingBag, XCircle 
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { App as CapacitorApp } from '@capacitor/app';
 
 // Component Imports
 import Header from "../components/Header";
@@ -48,25 +49,58 @@ const HomeScreen = ({
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isTrackingOpen, setIsTrackingOpen] = useState(false);
 
+  const [isListening, setIsListening] = useState(false);
+  const [recentProducts, setRecentProducts] = useState<any[]>([]);
+
+  // 🎯 WE NEED LOCAL STATE CONTROL OVER LIVE ORDER TO CLEAR IT ON DISMISSAL
+  const [localLiveOrder, setLocalLiveOrder] = useState<any>(null);
+
+  // Sync props to local state so we can manipulate it
+  useEffect(() => {
+    setLocalLiveOrder(liveOrder);
+  }, [liveOrder]);
+
   useEffect(() => {
     const interval = setInterval(() => setHintIndex(prev => (prev + 1) % SEARCH_HINTS.length), 3000);
     return () => clearInterval(interval);
   }, []);
 
+  // Hardware Back Button Logic
   useEffect(() => {
-    window.history.pushState(null, "", window.location.href);
-    const handleBack = () => {
-      if (isTrackingOpen) setIsTrackingOpen(false);
-      else if (isCartOpen) setIsCartOpen(false);
-      else if (selectedProduct) setSelectedProduct(null);
-      else if (isLikedPageOpen) setIsLikedPageOpen(false);
-      else if (viewAll) setViewAll(null);
-      else if (searchQuery !== "") setSearchQuery("");
-      window.history.pushState(null, "", window.location.href);
+    let listener: any;
+
+    const setupHardwareBack = async () => {
+      try {
+        listener = await CapacitorApp.addListener('backButton', () => {
+          if (isTrackingOpen) {
+            setIsTrackingOpen(false);
+            // 🎯 LOGIC FIX: Auto-remove the cancelled order from UI when pressing back
+            setLocalLiveOrder((prev: any) => prev?.status === 'cancelled' ? null : prev);
+          } else if (isCartOpen) {
+            setIsCartOpen(false);
+          } else if (selectedProduct) {
+            setSelectedProduct(null);
+          } else if (isLikedPageOpen) {
+            setIsLikedPageOpen(false);
+          } else if (viewAll) {
+            setViewAll(null);
+          } else if (searchQuery !== "") {
+            setSearchQuery("");
+          } else {
+            CapacitorApp.exitApp();
+          }
+        });
+      } catch (err) {
+        console.warn("Capacitor backButton not available in standard web view", err);
+      }
     };
-    window.addEventListener("popstate", handleBack);
-    return () => window.removeEventListener("popstate", handleBack);
-  }, [isCartOpen, viewAll, searchQuery, selectedProduct, isLikedPageOpen, isTrackingOpen]);
+
+    setupHardwareBack();
+
+    return () => {
+      if (listener) listener.remove();
+    };
+  }, [isTrackingOpen, isCartOpen, selectedProduct, isLikedPageOpen, viewAll, searchQuery]);
 
   const updateQuantity = (id: number, delta: number) => {
     setCart(prev => {
@@ -90,6 +124,14 @@ const HomeScreen = ({
     onOrderPlaced(orderData); 
   };
 
+  const handleProductClick = (product: any) => {
+    setSelectedProduct(product);
+    setRecentProducts(prev => {
+      const filtered = prev.filter(p => p.id !== product.id);
+      return [product, ...filtered].slice(0, 10);
+    });
+  };
+
   const totalCartItems = Object.values(cart).reduce((a, b) => a + b, 0);
   const searchResults = searchQuery 
     ? (products || []).filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase())) 
@@ -108,7 +150,10 @@ const HomeScreen = ({
       <SearchSection 
         query={searchQuery} setQuery={setSearchQuery} 
         isFocused={isSearchFocused} setIsFocused={setIsSearchFocused}
-        hint={SEARCH_HINTS[hintIndex]} onVoice={() => {}} onCamera={() => {}}
+        hint={SEARCH_HINTS[hintIndex]} 
+        isListening={isListening} 
+        onVoice={() => setIsListening(!isListening)} 
+        onCamera={() => {}}
       />
 
       <main className="flex-1 overflow-y-auto no-scrollbar pb-32">
@@ -153,16 +198,19 @@ const HomeScreen = ({
                     />
                   )}
 
-                  <ProductGrid 
+                 <ProductGrid 
                     products={secProds} 
                     cart={cart} 
                     onUpdateQuantity={updateQuantity} 
-                    onProductClick={setSelectedProduct} 
+                    onProductClick={handleProductClick} 
                     onSeeAll={() => setViewAll({ 
                       type: 'product', 
                       title: `${section.title} Best Sellers`, 
                       data: secProds 
                     })}
+                    // 🎯 PASS THESE TWO NEW PROPS:
+                    isBulkSection={section.title?.toLowerCase().includes('bulk')}
+                    onOpenCart={() => setIsCartOpen(true)}
                   />
                 </section>
               );
@@ -173,7 +221,7 @@ const HomeScreen = ({
             <h3 className="text-[10px] font-black uppercase text-white/40 tracking-wide mb-6">found {searchResults.length} items</h3>
             <div className="grid grid-cols-2 gap-5">
               {searchResults.map((p: any) => (
-                <motion.div key={p.id} layout onClick={() => setSelectedProduct(p)} className="bg-white/[0.02] border border-white/10 rounded-[2.5rem] p-5 active:scale-95 transition-transform">
+                <motion.div key={p.id} layout onClick={() => handleProductClick(p)} className="bg-white/[0.02] border border-white/10 rounded-[2.5rem] p-5 active:scale-95 transition-transform">
                   <div className="aspect-square rounded-3xl bg-white/[0.03] flex items-center justify-center overflow-hidden mb-5">
                     {p.image_url ? (
                       <img src={p.image_url} className="w-full h-full object-contain p-2" alt="" />
@@ -194,19 +242,19 @@ const HomeScreen = ({
       </main>
 
       <AnimatePresence>
-        {liveOrder && (
+        {localLiveOrder && (
           <motion.div 
             initial={{ y: 100, opacity: 0 }} 
             animate={{ y: 0, opacity: 1 }} 
             exit={{ y: 100, opacity: 0 }}
             onClick={() => setIsTrackingOpen(true)}
             className={`fixed bottom-28 left-6 right-6 z-[100] p-4 rounded-[2.2rem] flex items-center justify-between shadow-[0_20px_40px_rgba(0,0,0,0.4)] border-4 border-[#08080a] cursor-pointer transition-colors ${
-              liveOrder.status === 'cancelled' ? 'bg-red-500' : 'bg-primary'
+              localLiveOrder.status === 'cancelled' ? 'bg-red-500' : 'bg-primary'
             }`}
           >
             <div className="flex items-center gap-4 text-black">
               <div className="w-14 h-14 bg-black rounded-2xl flex items-center justify-center shadow-xl relative">
-                {liveOrder.status === 'cancelled' ? (
+                {localLiveOrder.status === 'cancelled' ? (
                    <XCircle size={28} className="text-red-500" />
                 ) : (
                   <>
@@ -220,11 +268,11 @@ const HomeScreen = ({
               </div>
               <div>
                 <h4 className="font-black text-sm uppercase leading-none mb-1.5 tracking-tighter">
-                  {liveOrder.status === 'cancelled' ? 'Order Cancelled' : `Order ${liveOrder.status}`}
+                  {localLiveOrder.status === 'cancelled' ? 'Order Cancelled' : `Order ${localLiveOrder.status}`}
                 </h4>
                 <div className="flex items-center gap-1.5 opacity-60">
-                  {liveOrder.status === 'cancelled' ? (
-                     <span className="text-[10px] font-black uppercase tracking-widest text-black">Tap to view details</span>
+                  {localLiveOrder.status === 'cancelled' ? (
+                      <span className="text-[10px] font-black uppercase tracking-widest text-black">Tap to view details</span>
                   ) : (
                     <>
                       <Timer size={14} strokeWidth={3} />
@@ -235,11 +283,12 @@ const HomeScreen = ({
               </div>
             </div>
             
-            {liveOrder.status === 'cancelled' ? (
+            {localLiveOrder.status === 'cancelled' ? (
               <button 
                 onClick={(e) => { 
                   e.stopPropagation(); 
-                  onUpdateUser({...user});
+                  // 🎯 LOGIC FIX: Make the explicit 'X' button actually clear the widget
+                  setLocalLiveOrder(null);
                 }}
                 className="w-10 h-10 rounded-full bg-black/20 flex items-center justify-center text-black hover:bg-black/30 transition-colors"
               >
@@ -254,7 +303,7 @@ const HomeScreen = ({
         )}
       </AnimatePresence>
 
-      {!liveOrder && totalCartItems > 0 && (
+      {!localLiveOrder && totalCartItems > 0 && (
         <FloatingCart cartCount={totalCartItems} onClick={() => setIsCartOpen(true)} />
       )}
 
@@ -271,18 +320,33 @@ const HomeScreen = ({
           />
         )}
         {viewAll && (
-          <SeeAllScreen type={viewAll.type} title={viewAll.title} data={viewAll.data} cart={cart} onUpdateQuantity={updateQuantity} onCategoryClick={handleCategoryClick} onOpenCart={() => setIsCartOpen(true)} onProductClick={setSelectedProduct} onBack={() => setViewAll(null)} />
+          <SeeAllScreen type={viewAll.type} title={viewAll.title} data={viewAll.data} cart={cart} onUpdateQuantity={updateQuantity} onCategoryClick={handleCategoryClick} onOpenCart={() => setIsCartOpen(true)} onProductClick={handleProductClick} onBack={() => setViewAll(null)} />
         )}
         {selectedProduct && (
-          <ProductDetailScreen product={selectedProduct} allProducts={products} cart={cart} onUpdateQuantity={updateQuantity} onOpenCart={() => setIsCartOpen(true)} onProductClick={setSelectedProduct} isLiked={likedIds.includes(selectedProduct.id)} onToggleLike={() => setLikedIds(prev => prev.includes(selectedProduct.id) ? prev.filter(id => id !== selectedProduct.id) : [...prev, selectedProduct.id])} onClose={() => setSelectedProduct(null)} />
+          <ProductDetailScreen 
+            product={selectedProduct} 
+            allProducts={products} 
+            recentProducts={recentProducts} 
+            cart={cart} 
+            onUpdateQuantity={updateQuantity} 
+            onOpenCart={() => setIsCartOpen(true)} 
+            onProductClick={handleProductClick} 
+            isLiked={likedIds.includes(selectedProduct.id)} 
+            onToggleLike={() => setLikedIds(prev => prev.includes(selectedProduct.id) ? prev.filter(id => id !== selectedProduct.id) : [...prev, selectedProduct.id])} 
+            onClose={() => setSelectedProduct(null)} 
+          />
         )}
         {isLikedPageOpen && (
-          <LikedScreen likedProducts={products.filter(p => likedIds.includes(p.id))} cart={cart} onUpdateQuantity={updateQuantity} onProductClick={setSelectedProduct} onBack={() => setIsLikedPageOpen(false)} />
+          <LikedScreen likedProducts={products.filter(p => likedIds.includes(p.id))} cart={cart} onUpdateQuantity={updateQuantity} onProductClick={handleProductClick} onBack={() => setIsLikedPageOpen(false)} />
         )}
         {isTrackingOpen && (
           <OrderTrackingScreen 
-            order={liveOrder} 
-            onClose={() => setIsTrackingOpen(false)} 
+            order={localLiveOrder} 
+            onClose={() => {
+              setIsTrackingOpen(false);
+              // 🎯 LOGIC FIX: Auto-remove the cancelled order from UI when closing tracking view via software back button
+              setLocalLiveOrder((prev: any) => prev?.status === 'cancelled' ? null : prev);
+            }} 
           />
         )}
       </AnimatePresence>
