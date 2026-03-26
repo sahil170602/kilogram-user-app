@@ -29,7 +29,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
   // Google Maps API Key for the Visual Map Viewer
   const GOOGLE_MAPS_API_KEY = 'AIzaSyDItwA1G4wtDpaOYGENGZ2CjjZQmGDDt5Y';
 
-  // --- 1. AUTHENTICATION LOGIC ---
+  // --- 1. AUTHENTICATION LOGIC (🎯 UPDATED SMART ROUTING) ---
   const checkUserExists = async () => {
     setLoading(true);
     try {
@@ -43,10 +43,29 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
 
       if (data) {
         setUserId(data.id);
-        setName(data.full_name);
+        setName(data.full_name || "");
         setEmail(data.email || "");
-        setStep('location');
+
+        // 🎯 SMART BYPASS: If they already have an address and coordinates saved, skip to Home!
+        if (data.full_name && data.last_address && data.last_lat && data.last_lng) {
+          onLogin({ 
+            id: data.id,
+            full_name: data.full_name, 
+            email: data.email || "",
+            phone: formattedPhone, 
+            location: { 
+              lat: data.last_lat, 
+              lng: data.last_lng, 
+              address: data.last_address 
+            } 
+          });
+          return; // Stop execution here so it doesn't change steps
+        } else {
+          // Existing user but missing location, go to step 3
+          setStep('location');
+        }
       } else {
+        // Brand new user, go to step 2
         setStep('profile');
       }
     } catch (err) {
@@ -93,7 +112,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
       return;
     }
 
-    // Forces re-detection to bypass cache (fixes Nagpur vs Gondia issue)
+    // Forces re-detection to bypass cache
     const geoOptions = {
       enableHighAccuracy: true, 
       timeout: 15000,           
@@ -115,7 +134,6 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
 
   // --- 4. DATA SYNC & FINALIZATION ---
   const handleFinalize = async () => {
-    // Basic validation for the manual text entry
     if (!manualAddress || manualAddress.trim().length < 5) {
       alert("Please enter a clear address (House No, Street) for delivery precision.");
       return;
@@ -124,13 +142,12 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
     setLoading(true);
     try {
       if (userId) {
-        // Sync coordinates and the manual typed text to Supabase 'profiles' table
         const { error: updateError } = await supabase
           .from('profiles')
           .update({ 
             last_lat: coords.lat, 
             last_lng: coords.lng, 
-            last_address: manualAddress // 🎯 Correctly saving manual text here
+            last_address: manualAddress 
           })
           .eq('id', userId);
         
@@ -146,7 +163,6 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
       });
     } catch (err) {
       console.error("Supabase Sync Error:", err);
-      // Fallback allows user to proceed even if DB sync flickers
       onLogin({ id: userId, full_name: name, email, phone: formattedPhone });
     } finally {
       setLoading(false);

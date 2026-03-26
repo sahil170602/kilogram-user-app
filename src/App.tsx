@@ -24,24 +24,34 @@ function App() {
   useEffect(() => {
     const initializeApp = async () => {
       const savedUser = localStorage.getItem('kilo_session');
+      
       if (savedUser) {
         try {
           const parsedUser = JSON.parse(savedUser);
-          // Fetch fresh profile data to get the latest manual address
-          const { data: profile } = await supabase
+          
+          // 🎯 FIX: Set user immediately from storage so the app feels instant and doesn't get stuck
+          setUser(parsedUser);
+          setPreciseAddress(parsedUser.location?.address || parsedUser.last_address || "set location");
+
+          // Fetch fresh profile data quietly in the background
+          const { data: profile, error } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', parsedUser.id)
             .maybeSingle();
           
+          if (error) throw error;
+
           if (profile) {
             setUser(profile);
             setPreciseAddress(profile.last_address || "set location");
-          } else {
-            setUser(parsedUser);
+            // Update local storage with fresh data
+            localStorage.setItem('kilo_session', JSON.stringify(profile));
           }
         } catch (e) {
-          localStorage.removeItem('kilo_session');
+          // 🎯 FIX: DO NOT remove the session here! 
+          // Mobile networks drop often. Removing the session here caused the "Auto Logout" bug.
+          console.error("Background profile sync failed, keeping local session active:", e);
         }
       }
       await fetchStoreData();
@@ -152,11 +162,13 @@ function App() {
     setStage('dashboard');
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setShowProfile(false);
     localStorage.removeItem('kilo_session');
     setUser(null);
     setStage('login');
+    // Also sign out of the Supabase backend session
+    await supabase.auth.signOut();
   };
 
   const updateGlobalUser = (updatedUser: any) => {
